@@ -3,6 +3,7 @@ import os
 import sys
 import logging
 import time
+import json
 from urllib.parse import urlparse
 
 from selenium import webdriver
@@ -11,6 +12,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import StaleElementReferenceException
 
 import helpers
 
@@ -22,9 +24,12 @@ CHRONOPOST_ID = 'SelectedDeliveryModeId370008'
 CHRONOPOST_EXP_ID = 'SelectedDeliveryModeId370009'
 
 
-class UrlNotReady(Exception):
-    def __init__(self, url):
-        self.url = url
+class UrlNotAvailable(Exception):
+    pass
+
+
+class CartAddFailure(Exception):
+    pass
 
 
 class CallFailed(Exception):
@@ -38,16 +43,14 @@ class PayementRefused(Exception):
 
 def stubborn_call(f):
     def decorated(driver, *args, **kwargs):
-        max_attemps = kwargs.pop('max_attemps', 3)
+        max_attemps = kwargs.pop('max_attemps', 5)
         sleep_for = kwargs.pop('sleep_for', 3)
         nb_attemps = 0
         while nb_attemps < max_attemps:
             nb_attemps = nb_attemps + 1
             try:
                 return f(driver, *args, **kwargs)
-            except UrlNotReady as exc:
-                logger.error(f"{exc.url} is not ready")
-                helpers.push_msg_no_spam(f"{exc.url} is not ready")
+            except (UrlNotAvailable, CartAddFailure):
                 raise
             except Exception as exc:
                 if 'maintenance' in driver.title:
@@ -99,8 +102,8 @@ def log_in_ldlc(driver, user, password):
     logger.info(f"Loging successful")
 
 @stubborn_call
-def buy_url(driver, url, cc):
-    helpers.push_msg_no_spam(f"Buying tentative ({url})")
+def buy_url(driver, url, cc, product_name='unspecified'):
+    helpers.push_msg_no_spam(f"Buying tentative: {product_name} ({url})")
     ensure_empty_basket(driver)
     get_and_ensure_url(driver, url)
     checkout(driver)
@@ -138,7 +141,7 @@ def ensure_empty_basket(driver):
         logger.info(f"Successfully emptied the basket")
         
 def get_and_ensure_url(driver, url):
-    logger.info(f"Get  {url}")
+    logger.info(f"Get {url}")
     driver.get(url)
 
     url_ready = False
@@ -151,43 +154,99 @@ def get_and_ensure_url(driver, url):
             url_ready = True
     
     if not url_ready:
-        raise UrlNotReady(url)
+        logger.error(f"{url} is not ready")
+        helpers.push_msg_no_spam(f"{url} is not ready")
+        raise UrlNotAvailable()
 
 def checkout(driver):
     logger.info(f"Add product in cart")
+
     try:
-        insta_buy_elt = WebDriverWait(driver, 2).until(
+        WebDriverWait(driver, 2).until(
             EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, 'ACHETER CET ARTICLE'))
         )
-        insta_buy_elt.click()
-        logger.info(f"Instant checkout worked")
     except:
-        logger.info(f"Switching to manual cart checkout")
-        add_cart_elt = WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, 'AJOUTER AU PANIER'))
-        )
-        add_cart_elt.click()
+        we_left_the_page = cart_checkout(driver)
+    else:
+        we_left_the_page = one_click_checkout(driver)
 
-        see_cart_elt = WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, 'VOIR MON PANIER'))
-        )
-        see_cart_elt.click()
+    # Check if we are still on the page in which case we have most likely been
+    # offered an extended waranty: we refuse
+    if not we_left_the_page:
+        logger.info(f"Still on the page: extended warranty refusal tentative")
+        try:
+            refuse_elt = WebDriverWait(driver, TIMEOUT).until(
+                EC.element_to_be_clickable((By.LINK_TEXT, 'NON MERCI'))
+            )
+            refuse_elt.click()
+            logger.info(f"Refused extended warranty")
+        except:
+            logger.info(f"Warranty refusal failed")
 
-        order_div_elt = driver.find_element_by_id('order')
-        checkout_elt = order_div_elt.find_element_by_css_selector('button.maxi')
-        checkout_elt.click()
+def one_click_checkout(driver):
+    # Get reference of generic modals to react to
+    default_modal_elt = driver.find_element_by_id('modal-default')
+    generic_modal_elt = driver.find_element_by_id('error-generic-modal')
 
+    buy_elt = driver.find_element_by_partial_link_text('ACHETER CET ARTICLE')
+    buy_elt.click()
+    logger.info(f"Instant checkout was available")
+
+    # Check for cart add error. Also capture stale error to check if we left
+    # the page or not
     try:
-        refuse_elt = WebDriverWait(driver, TIMEOUT).until(
-            EC.element_to_be_clickable((By.LINK_TEXT, 'NON MERCI'))
-        )
-        refuse_elt.click()
-        logger.info(f"Refused extended warranty")
-    except:
-        logger.info(f"Extended warranty not offered")
+        if generic_modal_elt.is_displayed() or default_modal_elt.is_displayed():
+            logger.error(f"Modal error: cart add failed")
+            helpers.push_msg_no_spam(f"Modal error: cart add failed")
+            raise CartAddFailure()
+    except StaleElementReferenceException:
+        we_left_the_page = True
+    else:
+        we_left_the_page = False
+
+    return we_left_the_page
+
+def cart_checkout(driver):
+    logger.info(f"Switching to manual cart checkout")
+    add_cart_elt = WebDriverWait(driver, TIMEOUT).until(
+        EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, 'AJOUTER AU PANIER'))
+    )
+    add_cart_elt.click()
+
+    see_cart_elt = WebDriverWait(driver, TIMEOUT).until(
+        EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, 'VOIR MON PANIER'))
+    )
+    see_cart_elt.click()
+
+    order_div_elt = driver.find_element_by_id('order')
+    checkout_elt = order_div_elt.find_element_by_css_selector('button.maxi')
+    checkout_elt.click()
+
+    # Test if the clicked element is stale, in which case we left the page
+    try:
+        checkout_elt.is_enabled()
+    except StaleElementReferenceException:
+        we_left_the_page = True
+    else:
+        we_left_the_page = False
+
+    return we_left_the_page
 
 def ensure_home_delivery(driver):
     logger.info(f"Ensuring home delivery")
+
+    # First wait for the (hopefully) allways present regular chronopost option
+    chronop_radio_elt = wait_staleness(driver, (By.ID, CHRONOPOST_ID))
+    if chronop_radio_elt.get_attribute('selected') != 'true':
+        logger.info(f'Switching to regular chronopost')
+        chronop_div_elt = chronop_radio_elt.find_element_by_xpath('./..')
+        chronop_div_elt.click()
+        wait_staleness(driver, (By.ID, 'CardNumber'))
+    else:
+        logger.info(f"Chronopost already selected")
+
+def try_express_delivery(driver):
+    logger.info(f"Try express delivery")
 
     # First wait for the (hopefully) allways present regular chronopost option
     chronop_radio_elt = wait_staleness(driver, (By.ID, CHRONOPOST_ID))
@@ -244,7 +303,7 @@ def order(driver, cc):
 
 def wait_3ds(driver):
     logger.warning(f"Waiting for 3DS approval")
-    helpers.push_msg(f"Waiting for 3DS approval", priority=2)
+    helpers.push_msg(f"Waiting for 3DS approval")
     time.sleep(2)
     while 'ldlc.com' not in urlparse(driver.current_url).netloc:
         time.sleep(1)

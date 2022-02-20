@@ -33,7 +33,7 @@ else:
     def play_sound():
         pass
 
-def push_msg(msg, priority=1, with_sound=False):
+def push_msg(msg, with_sound=False):
     if with_sound:
         play_sound()
     url = 'https://api.pushover.net/1/messages.json'
@@ -43,13 +43,19 @@ def push_msg(msg, priority=1, with_sound=False):
         'token': app_token,
         'user': user,
         'message': msg,
-        'priority': priority,
+        'priority': 1,
     }
     r = requests.post(url, data=data)
 
 _last_msg_time = {}
-def push_msg_no_spam(msg, priority=1, with_sound=False, elapsed=60):
+def push_msg_no_spam(msg, with_sound=False, elapsed=60):
     now = time.time()
     if (msg not in _last_msg_time) or (now - _last_msg_time[msg] > elapsed):
-        push_msg(msg, priority, with_sound)
+        push_msg(msg, with_sound)
         _last_msg_time[msg] = now
+
+_msg_pushed = set()
+def push_msg_once(msg, with_sound=False):
+    if msg not in _msg_pushed:
+        push_msg(msg, with_sound)
+        _msg_pushed.add(msg)
