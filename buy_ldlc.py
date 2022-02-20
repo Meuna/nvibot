@@ -3,7 +3,6 @@ import os
 import sys
 import logging
 import time
-import json
 from urllib.parse import urlparse
 
 from selenium import webdriver
@@ -60,7 +59,7 @@ def stubborn_call(f):
                     logger.exception(exc)
 
             time.sleep(sleep_for)
-    
+
         logger.error(f"Max stubborn_buy attempts reached ({max_attemps})")
         raise CallFailed()
 
@@ -72,7 +71,7 @@ def stubborn_call(f):
 @stubborn_call
 def log_in_ldlc(driver, user, password):
     driver.get('https://www.ldlc.com')
-    
+
     # Accept cookie if needed
     ldlc_cookies = [ck['name'] for ck in driver.get_cookies() if ck['domain'] == '.ldlc.com']
     if 'cookiespreferences' not in ldlc_cookies:
@@ -103,7 +102,7 @@ def log_in_ldlc(driver, user, password):
 
 @stubborn_call
 def buy_url(driver, url, cc, product_name='unspecified'):
-    helpers.push_msg_no_spam(f"Buying tentative: {product_name} ({url})")
+    # helpers.push_msg_no_spam(f"Buying tentative: {product_name} ({url})")
     ensure_empty_basket(driver)
     get_and_ensure_url(driver, url)
     checkout(driver)
@@ -139,7 +138,7 @@ def ensure_empty_basket(driver):
         )
         confirm_button_elt.click()
         logger.info(f"Successfully emptied the basket")
-        
+
 def get_and_ensure_url(driver, url):
     logger.info(f"Get {url}")
     driver.get(url)
@@ -152,7 +151,7 @@ def get_and_ensure_url(driver, url):
             driver.find_element_by_css_selector('div.p404')
         except:
             url_ready = True
-    
+
     if not url_ready:
         logger.error(f"{url} is not ready")
         helpers.push_msg_no_spam(f"{url} is not ready")

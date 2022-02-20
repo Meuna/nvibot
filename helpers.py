@@ -14,7 +14,7 @@ if os.name == 'nt':
         ldlc_password = os.environ['LDLC_PASSWORD']
         cc = json.loads(os.environ['CC'])
         return ldlc_user, ldlc_password, cc
-    
+
     def play_sound():
         sound = f'C:/Windows/Media/Alarm01.wav'
         target = lambda:winsound.PlaySound(sound, winsound.SND_FILENAME)
@@ -24,7 +24,7 @@ else:
 
     def get_secrets():
         client = boto3.client('ssm', region_name='eu-west-3')
-        
+
         ldlc_user = client.get_parameter(Name='LDLC_USER', WithDecryption=True)['Parameter']['Value']
         ldlc_password = client.get_parameter(Name='LDLC_PASSWORD', WithDecryption=True)['Parameter']['Value']
         cc = json.loads(client.get_parameter(Name='CC', WithDecryption=True)['Parameter']['Value'])
@@ -54,8 +54,9 @@ def push_msg_no_spam(msg, with_sound=False, elapsed=60):
         push_msg(msg, with_sound)
         _last_msg_time[msg] = now
 
-_msg_pushed = set()
+_pushed_msg = set()
 def push_msg_once(msg, with_sound=False):
-    if msg not in _msg_pushed:
+    if msg not in _pushed_msg:
         push_msg(msg, with_sound)
-        _msg_pushed.add(msg)
+        _pushed_msg.add(msg)
+
