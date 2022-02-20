@@ -162,7 +162,7 @@ def checkout(driver):
 
     try:
         WebDriverWait(driver, 2).until(
-            EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, 'ACHETER CET ARTICLE'))
+            EC.element_to_be_clickable((By.CSS_SELECTOR, 'button.add-to-cart-oneclic'))
         )
     except:
         we_left_the_page = cart_checkout(driver)
@@ -187,7 +187,7 @@ def one_click_checkout(driver):
     default_modal_elt = driver.find_element_by_id('modal-default')
     generic_modal_elt = driver.find_element_by_id('error-generic-modal')
 
-    buy_elt = driver.find_element_by_partial_link_text('ACHETER CET ARTICLE')
+    buy_elt = driver.find_element_by_css_selector('button.add-to-cart-oneclic')
     buy_elt.click()
     logger.info(f"Instant checkout was available")
 
@@ -208,7 +208,7 @@ def one_click_checkout(driver):
 def cart_checkout(driver):
     logger.info(f"Switching to manual cart checkout")
     add_cart_elt = WebDriverWait(driver, TIMEOUT).until(
-        EC.element_to_be_clickable((By.PARTIAL_LINK_TEXT, 'AJOUTER AU PANIER'))
+        EC.element_to_be_clickable((By.CSS_SELECTOR, 'button.add-to-cart'))
     )
     add_cart_elt.click()
 
