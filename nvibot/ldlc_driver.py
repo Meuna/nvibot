@@ -91,7 +91,7 @@ class LdlcDriver:
 
     def __enter__(self):
         options = Options()
-        # options.headless = True
+        options.headless = True
         self._driver = webdriver.Firefox(
             options=options, service_log_path=os.path.devnull
         )
