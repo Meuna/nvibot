@@ -4,8 +4,6 @@ import sys
 import argparse
 import logging
 
-from nvibot import nvibot
-
 from . import __title__
 from .notifiers import PushoverNotifier, DiscordNotifier
 from .nvibot import Nvibot
@@ -29,11 +27,13 @@ def run_nvibot():
 
     args = parser.parse_args()
 
+    # Logging initialisation
     logging.basicConfig(
         stream=sys.stderr, format="%(asctime)s - %(levelname)s: %(message)s"
     )
     logger.setLevel(logging.DEBUG)
 
+    # Brobot components initialisation
     secret_manager = secrets.get_manager(args.buyer)
     if args.notifier == "discord":
         notifier = DiscordNotifier(secret_manager)
@@ -47,6 +47,8 @@ def run_nvibot():
     bot = Nvibot(
         ldlc_driver, nvidia_scrapper, notifier, args.buy_priority, args.buy_limit
     )
+
+    # Run the brobot
     try:
         bot.run()
     except Exception as exc:

@@ -13,6 +13,18 @@ logger = logging.getLogger(__title__)
 
 
 class Nvibot:
+    """A bot to watch the availability of Nvidia GPUs, and automatically buy
+    selected models.
+
+    At most, one copy of each category is bought.
+
+    :param ldlc_driver: the LDLC buying driver
+    :param nvidia_scrapper: the Nvidia API scrapper
+    :param notifier: used to push notifications
+    :param buy_priority: the list of selected GPU models
+    :param buy_limit: the maximum number of models to buy
+    """
+
     def __init__(
         self,
         ldlc_driver: LdlcDriver,
@@ -68,13 +80,14 @@ class Nvibot:
                     self._notifier.humble_push(f"Errors are stacking: {exc}")
                     successive_error_count = 0
 
-            # Try to buy stuff
             for product in self._buy_priority:
                 if not self.done and product in urls_to_try:
                     product_url = urls_to_try[product]
                     self._notifier.push(
                         f"Transaction attempt: {product} ({product_url})"
                     )
+
+                    # Safely try to buy stuff
                     try:
                         self._ldlc_driver.buy(product_url)
                     except LdlcError:

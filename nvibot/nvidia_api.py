@@ -31,6 +31,11 @@ class NvidiaApiError(Exception):
 
 
 class NvidiaApiScrapper:
+    """Scrap the Nvidia API to retrieve the URL of available Nvidia GPUs.
+
+    :param notifier: used to push notifications
+    :param timeout:
+    """
 
     api_url = "https://api.store.nvidia.com/partner/v1/feinventory"
     api_params = {
@@ -65,6 +70,10 @@ class NvidiaApiScrapper:
         self._timeout = timeout
 
     def scrap(self) -> Dict[str, str]:
+        """Return a dictionary of the available GPUs. Key are GPU name and
+        values are store URL.
+        """
+
         timestamp = round(time.time())
         params = self.api_params.copy()
         params["timestamp"] = str(timestamp)

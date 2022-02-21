@@ -44,8 +44,14 @@ class PayementRefused(LdlcError):
     pass
 
 
-# Decorated methods retry few times when they fail
 def stubborn_call(method):
+    """Decorates a method to make it retry until it fails enough attempt. It
+    extracts the folowing keyword arguments.
+
+    :param max_attemps: number of attempts before giving up
+    :param sleep_for: how much time slept between attempts
+    """
+
     def decorated(self, *args, **kwargs):
         max_attemps = kwargs.pop("max_attemps", 5)
         sleep_for = kwargs.pop("sleep_for", 2)
@@ -74,6 +80,21 @@ def stubborn_call(method):
 
 
 class LdlcDriver:
+    """An LDLC buying driver, over a Selenium Firefox driver. It should be used
+    inside as a contect manager.
+
+    :param notifier: used to push the driver notifications
+    :param secret_manager: used to retrieve credentials and credit cards
+        informations
+    :param timeout: used to wait various event by the driver
+
+    Example:
+
+        >>> with LdlcDriver(notifier, secret_manager) as ldlc:
+                ldlc.login()
+                ldlc.buy(url)
+    """
+
     url = "https://www.ldlc.com"
 
     def __init__(
